@@ -1,15 +1,19 @@
 name: A1 Capacity Hunt
 
-# Runs every 30 minutes. With each run taking ~30s, this is ~24 min/month
-# of Actions usage - well under the 2000 min/mo free tier for private repos.
-# For more aggressive hunting, change to '*/15 * * * *' (60 min/mo) or
-# '*/10 * * * *' (90 min/mo).
+# Runs every 10 minutes at :00, :10, :20, :30, :40, :50.
+# The 1/6 hunt is offset to :05, :15, :25, :35, :45, :55 so combined the
+# two workflows fire one attempt every 5 minutes without colliding on
+# OCI's API. 5 minutes is GitHub Actions' minimum cron interval - can't
+# go faster than that on the platform.
+#
+# Public repos get unlimited Actions minutes, so the previous free-tier
+# math no longer applies.
 #
 # GitHub Actions cron is best-effort: scheduled runs can be delayed during
 # heavy load and rare runs may be skipped. Don't expect millisecond precision.
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '0,10,20,30,40,50 * * * *'
   workflow_dispatch:  # allow manual trigger from the Actions tab
 
 permissions:

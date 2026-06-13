@@ -3,12 +3,12 @@ name: A1 Capacity Hunt (1/6)
 # Same hunt as hunt.yml but for the smaller 1 OCPU / 6 GB shape.
 # Smaller asks are more likely to find fragmented capacity.
 #
-# Schedule is offset from the 2/12 hunt: fires at :15 and :45 so the two
-# workflows don't slam OCI's API simultaneously. Combined cadence across
-# both workflows is one attempt every 15 minutes (96 runs/day).
+# Schedule is offset by 5 minutes from the 2/12 hunt. Combined the two
+# workflows fire one attempt every 5 minutes (GitHub Actions minimum
+# cron interval) without colliding on OCI's API.
 on:
   schedule:
-    - cron: '15,45 * * * *'
+    - cron: '5,15,25,35,45,55 * * * *'
   workflow_dispatch:
 
 permissions:
