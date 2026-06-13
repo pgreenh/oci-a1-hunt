@@ -1,0 +1,49 @@
+name: A1 Capacity Hunt
+
+# Runs every 30 minutes. With each run taking ~30s, this is ~24 min/month
+# of Actions usage - well under the 2000 min/mo free tier for private repos.
+# For more aggressive hunting, change to '*/15 * * * *' (60 min/mo) or
+# '*/10 * * * *' (90 min/mo).
+#
+# GitHub Actions cron is best-effort: scheduled runs can be delayed during
+# heavy load and rare runs may be skipped. Don't expect millisecond precision.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:  # allow manual trigger from the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  # Only one hunt at a time. If a previous run is somehow still going, cancel it.
+  group: a1-hunt
+  cancel-in-progress: true
+
+jobs:
+  attempt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OCI SDK
+        run: pip install --no-cache-dir oci
+
+      - name: Attempt launch
+        env:
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID:    ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT:  ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION:       uk-london-1
+          OCI_PRIVATE_KEY:  ${{ secrets.OCI_PRIVATE_KEY }}
+          NTFY_URL:         ${{ secrets.NTFY_URL }}
+          OCPUS:            '2'
+          MEMORY:           '12'
+        run: python launch_a1.py
