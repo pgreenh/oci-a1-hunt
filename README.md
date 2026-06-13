@@ -49,3 +49,4 @@ run is ~30s but billed at the per-minute minimum (1 min/run).
 
 Default is `*/30` to stay safely inside free tier. Bump up only if you have
 paid Actions minutes or a public repo (unlimited).
+ 
