@@ -12,18 +12,39 @@ and disabling the workflow.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import urllib.request
 
 import oci
 
 
+def clean(s: str) -> str:
+    """Strip ALL whitespace (including embedded). OCI OCIDs and fingerprints
+    contain no legitimate whitespace, so this is safe and defends against
+    invisible characters introduced by paste mishaps in the GitHub Secrets UI."""
+    return re.sub(r"\s", "", s)
+
+
 # --- Auth from env (GitHub Actions secrets) ---
-TENANCY     = os.environ["OCI_TENANCY_OCID"]
-USER        = os.environ["OCI_USER_OCID"]
-FINGERPRINT = os.environ["OCI_FINGERPRINT"]
-REGION      = os.environ.get("OCI_REGION", "uk-london-1")
+# clean() strips ALL whitespace (including embedded). OCI OCIDs and fingerprints
+# never contain legitimate whitespace, so this is safe and defends against
+# trailing newlines or hidden characters from the GitHub Secrets paste UI.
+TENANCY     = clean(os.environ["OCI_TENANCY_OCID"])
+USER        = clean(os.environ["OCI_USER_OCID"])
+FINGERPRINT = clean(os.environ["OCI_FINGERPRINT"])
+REGION      = clean(os.environ.get("OCI_REGION", "uk-london-1"))
 PRIVATE_KEY = os.environ["OCI_PRIVATE_KEY"]
+
+# Diagnostic - log lengths so we can spot a secret that's the wrong size
+# without leaking the actual values.
+print(f"diag: TENANCY len={len(TENANCY)}, USER len={len(USER)}, "
+      f"FINGERPRINT len={len(FINGERPRINT)}, REGION='{REGION}'")
+# Sanity-check: an OCI fingerprint is exactly 47 chars (16 hex pairs + 15 colons).
+# A user/tenancy OCID is typically 90-110+ chars.
+if len(FINGERPRINT) != 47:
+    print(f"WARNING: FINGERPRINT is {len(FINGERPRINT)} chars, expected 47. "
+          "Re-paste the secret without trailing whitespace.", file=sys.stderr)
 
 # --- Launch parameters (edit constants below to retarget; or pass via env) ---
 # Hard-coded for now. If you want different per-workflow defaults, override
