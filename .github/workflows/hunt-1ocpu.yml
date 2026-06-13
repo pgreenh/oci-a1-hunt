@@ -22,9 +22,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 concurrency:
-  # Distinct from the 2/12 hunt's group so they don't cancel each other.
+  # Distinct from the 2/12 hunt's group so they don't interfere.
+  # cancel-in-progress: false means rapid-fire dispatches don't kill in-flight runs.
   group: a1-hunt-1ocpu
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   attempt:

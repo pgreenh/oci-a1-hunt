@@ -34,9 +34,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 concurrency:
-  # Only one hunt at a time. If a previous run is somehow still going, cancel it.
+  # Group so we can see related runs together, but allow simultaneous runs
+  # to all complete. With cancel-in-progress: false, rapid-fire dispatches
+  # (e.g. testing the Cloudflare worker URL) don't kill in-flight runs.
   group: a1-hunt
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   attempt:
