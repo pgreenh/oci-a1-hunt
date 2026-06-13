@@ -1,0 +1,51 @@
+name: A1 Capacity Hunt (1/6)
+
+# Same hunt as hunt.yml but for the smaller 1 OCPU / 6 GB shape.
+# Smaller asks are more likely to find fragmented capacity.
+#
+# Schedule is offset from the 2/12 hunt: fires at :15 and :45 so the two
+# workflows don't slam OCI's API simultaneously. Combined cadence across
+# both workflows is one attempt every 15 minutes (96 runs/day).
+on:
+  schedule:
+    - cron: '15,45 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  # Distinct from the 2/12 hunt's group so they don't cancel each other.
+  group: a1-hunt-1ocpu
+  cancel-in-progress: true
+
+jobs:
+  attempt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OCI SDK
+        run: pip install --no-cache-dir oci
+
+      - name: Attempt launch
+        env:
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID:    ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT:  ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION:       uk-london-1
+          OCI_PRIVATE_KEY:  ${{ secrets.OCI_PRIVATE_KEY }}
+          NTFY_URL:         ${{ secrets.NTFY_URL }}
+          OCPUS:            '1'
+          MEMORY:           '6'
+        run: python launch_a1.py
