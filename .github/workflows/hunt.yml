@@ -12,9 +12,15 @@ name: A1 Capacity Hunt
 # GitHub Actions cron is best-effort: scheduled runs can be delayed during
 # heavy load and rare runs may be skipped. Don't expect millisecond precision.
 on:
+  # Primary trigger: external Cloudflare Worker cron firing repository_dispatch.
+  # GitHub's public-repo cron is unreliable, so we use Cloudflare as the real
+  # scheduler and treat GitHub's schedule below as a fallback in case Cloudflare
+  # is down.
+  repository_dispatch:
+    types: [hunt-2-12]
   schedule:
-    - cron: '0,10,20,30,40,50 * * * *'
-  workflow_dispatch:  # allow manual trigger from the Actions tab
+    - cron: '0,10,20,30,40,50 * * * *'   # fallback only
+  workflow_dispatch:  # manual trigger from Actions tab
 
 permissions:
   contents: read

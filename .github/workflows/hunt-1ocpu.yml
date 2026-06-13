@@ -7,8 +7,12 @@ name: A1 Capacity Hunt (1/6)
 # workflows fire one attempt every 5 minutes (GitHub Actions minimum
 # cron interval) without colliding on OCI's API.
 on:
+  # Primary trigger: external Cloudflare Worker via repository_dispatch.
+  # GitHub's schedule below is a fallback only.
+  repository_dispatch:
+    types: [hunt-1-6]
   schedule:
-    - cron: '5,15,25,35,45,55 * * * *'
+    - cron: '5,15,25,35,45,55 * * * *'   # fallback only
   workflow_dispatch:
 
 permissions:
