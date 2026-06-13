@@ -15,6 +15,14 @@ on:
 permissions:
   contents: read
 
+# Opt into Node.js 24 for JavaScript actions. Node 20 is deprecated and will
+# be forced off on June 16, 2026; Node 20 is removed entirely on Sept 16, 2026.
+# Setting this env var now means actions/checkout and actions/setup-python run
+# on Node 24 already, so we don't get a nasty surprise when the forced switch
+# happens. Drop this once the default switches and the warning disappears.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 concurrency:
   # Only one hunt at a time. If a previous run is somehow still going, cancel it.
   group: a1-hunt
