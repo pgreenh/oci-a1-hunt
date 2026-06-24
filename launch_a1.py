@@ -73,6 +73,31 @@ def ntfy(title: str, msg: str, priority: str = "default", tags: str = "") -> Non
         print(f"ntfy failed: {e}", file=sys.stderr)
 
 
+def find_latest_arm_image(client, compartment_id):
+    """Look up the most recent available ARM Oracle Linux 8 image for
+    VM.Standard.A1.Flex. More resilient than the hardcoded IMAGE constant -
+    if Oracle retires the specific image OCID we have hardcoded, this finds
+    its successor automatically. Falls back to the hardcoded value on any
+    lookup failure so transient list_images() errors don't break the hunt."""
+    try:
+        resp = client.list_images(
+            compartment_id=compartment_id,
+            shape="VM.Standard.A1.Flex",
+            operating_system="Oracle Linux",
+            operating_system_version="8",
+            sort_by="TIMECREATED",
+            sort_order="DESC",
+            lifecycle_state="AVAILABLE",
+        )
+        if resp.data:
+            chosen = resp.data[0]
+            print(f"image lookup: using {chosen.display_name} ({chosen.id[-12:]})")
+            return chosen.id
+    except Exception as e:
+        print(f"image lookup failed ({e}); falling back to hardcoded IMAGE", file=sys.stderr)
+    return None
+
+
 def main() -> int:
     # OCI SDK wants the private key on disk. Write it to a runner-local temp.
     key_path = "/tmp/oci_api_key.pem"
@@ -91,6 +116,9 @@ def main() -> int:
     client = oci.core.ComputeClient(config)
     client.base_client.timeout = (30, 30)
 
+    # Change C: dynamic image lookup. Survives Oracle rotating image OCIDs.
+    image_id = find_latest_arm_image(client, TENANCY) or IMAGE
+
     for ad in ADS:
         print(f"trying {ad} for {OCPUS} OCPU / {MEMORY} GB")
         details = oci.core.models.LaunchInstanceDetails(
@@ -101,7 +129,7 @@ def main() -> int:
                 ocpus=OCPUS, memory_in_gbs=MEMORY,
             ),
             source_details=oci.core.models.InstanceSourceViaImageDetails(
-                source_type="image", image_id=IMAGE,
+                source_type="image", image_id=image_id,
             ),
             create_vnic_details=oci.core.models.CreateVnicDetails(
                 subnet_id=SUBNET, assign_public_ip=True,
@@ -114,25 +142,70 @@ def main() -> int:
                 details, retry_strategy=oci.retry.NoneRetryStrategy(),
             )
             instance = r.data
+            # Change A: verify lifecycle_state is one OCI uses for a fresh
+            # launch (PROVISIONING / STARTING / RUNNING). Anything else is
+            # suspicious - log loudly but still treat as success since the
+            # API returned data without raising.
+            if instance.lifecycle_state not in ("PROVISIONING", "STARTING", "RUNNING"):
+                print(f"WARNING: unexpected lifecycle_state '{instance.lifecycle_state}'", file=sys.stderr)
             print(f"SUCCESS! id={instance.id} state={instance.lifecycle_state}")
             ntfy(
                 f"OCI VM Created! ({OCPUS}/{MEMORY})",
-                f"AD: {ad}\nOCID: {instance.id}\n\n"
+                f"AD: {ad}\nOCID: {instance.id}\nState: {instance.lifecycle_state}\n\n"
                 "DISABLE THE WORKFLOW NOW to stop further attempts.",
                 "urgent", "tada,white_check_mark",
             )
             return 0
         except oci.exceptions.ServiceError as e:
             text = str(e)
-            if "Out of host capacity" in text:
+            # Change B: broader capacity detection. OCI wording has varied
+            # historically ("Out of host capacity", "Out of capacity",
+            # "Capacity unavailable"). The substring "capacity" (case-
+            # insensitive) catches all known variants. Also covers
+            # 500 InternalError where the body still mentions capacity.
+            if "capacity" in text.lower():
                 print(f"  {ad}: OutOfCapacity (expected)")
+                continue
+            # Explicit 500 InternalError without a capacity word - rare,
+            # but treat as transient. Empirically these correlate with
+            # the same allocation-cycle gap and clear themselves.
+            if e.status == 500 and "InternalError" in text:
+                print(f"  {ad}: 500 InternalError (treating as transient): {text[:120]}")
                 continue
             if e.status == 429 or "TooManyRequests" in text:
                 print(f"  {ad}: throttled")
                 continue
             if "LimitExceeded" in text:
-                print(f"  {ad}: LimitExceeded - you may already have an A1 instance")
-                ntfy("OCI LimitExceeded", text[:200], "high", "warning")
+                # LimitExceeded has two possible meanings:
+                #   (a) Transient quota-checker glitch (no instance actually exists)
+                #   (b) An A1 instance is genuinely running and consuming the budget
+                # Disambiguate by querying running instances. Only ntfy if we
+                # actually find an A1 instance, otherwise stay silent so cron
+                # noise doesn\'t flood the phone.
+                print(f"  {ad}: LimitExceeded - checking for existing A1 instance")
+                try:
+                    insts = client.list_instances(
+                        compartment_id=TENANCY,
+                        lifecycle_state="RUNNING",
+                    ).data
+                    a1 = [i for i in insts if i.shape == "VM.Standard.A1.Flex"]
+                    if a1:
+                        inst = a1[0]
+                        msg = (
+                            f"Discovered: {inst.display_name}\n"
+                            f"OCID: {inst.id}\n"
+                            f"State: {inst.lifecycle_state}\n\n"
+                            "DISABLE BOTH WORKFLOWS AND THE CLOUDFLARE TRIGGER NOW."
+                        )
+                        print(f"  FOUND running A1 instance: {inst.id}")
+                        ntfy(
+                            "OCI A1 Instance Already Running",
+                            msg, "urgent", "tada,white_check_mark",
+                        )
+                        return 0
+                    print(f"  no running A1 found - treating LimitExceeded as transient (silent)")
+                except Exception as e:
+                    print(f"  instance list check failed ({e}) - treating LimitExceeded as transient (silent)")
                 return 0
             if "NotAuthorizedOrNotFound" in text and "Authorization failed" in text:
                 print(f"  {ad}: NotAuthorizedOrNotFound (capacity-equivalent)")
