@@ -1,0 +1,57 @@
+name: OCI Instance Monitor
+
+# Runs every 15 minutes. Lists all RUNNING A1 instances in the tenancy and
+# alerts via ntfy if any unexpected ones appear (a hunter re-fired) or any
+# expected ones go missing (a keeper got terminated). Saves a JSON snapshot
+# of each run as an artifact - your continuous instance-state backup.
+#
+# Unlike the hunter workflows we just disabled, this workflow does NOT
+# launch anything. Read-only safety net.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: oci-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OCI SDK
+        run: pip install --no-cache-dir oci
+
+      - name: Run monitor
+        env:
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_USER_OCID:    ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT:  ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION:       uk-london-1
+          OCI_PRIVATE_KEY:  ${{ secrets.OCI_PRIVATE_KEY }}
+          NTFY_URL:         ${{ secrets.NTFY_URL }}
+        run: python monitor_instances.py
+
+      - name: Upload snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-${{ github.run_id }}
+          path: snapshot.json
+          retention-days: 14
