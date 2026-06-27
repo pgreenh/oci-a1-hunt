@@ -40,8 +40,9 @@ NTFY_URL    = os.environ.get("NTFY_URL", "").strip()
 # remove keepers in the future. The OCIDs below are your post-hunt steady
 # state (codex-vm-1ocpu and codex-vm-2ocpu). ---
 EXPECTED = {
+    # codex-vm-1ocpu was terminated; only the 2/12 remains as a keeper.
+    # If/when you resize the 2/12 the OCID stays the same, so no update needed.
     "ocid1.instance.oc1.uk-london-1.anwgiljrqr3zcfacnwqqg266kql5adpmrjbrpdaqnwfnvwz6r4x2ydiztfsq": "codex-vm-2ocpu",
-    "ocid1.instance.oc1.uk-london-1.anwgiljrqr3zcfackvzgfq435ywirozmhhe7msamnor7uerx5rts5g2wt7qq": "codex-vm-1ocpu",
 }
 
 
